@@ -195,7 +195,7 @@
   }
   function fbRound(asset,seed,start,drift,vol){const c=fakeWindow(seed,60,start,drift,vol);
     return{asset:asset,window:'60 sessions',candles:c,series:c.map(k=>k[3])};}
-  const FALLBACK={history_frac:0.6,source:'practice charts',rounds:[
+  const FALLBACK={history_frac:0.6,source:'demo (synthetic)',rounds:[
     fbRound('AAPL',7,180,0.0009,0.018), fbRound('TSLA',42,240,0.0015,0.035),
     fbRound('NVDA',99,450,0.0021,0.030), fbRound('KO',13,60,0.0003,0.011),
     fbRound('SPY',256,420,0.0006,0.010),
@@ -216,23 +216,17 @@
   const el=(t,a)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e;};
   const path=p=>p.map((q,i)=>(i?'L':'M')+q[0].toFixed(1)+' '+q[1].toFixed(1)).join(' ');
 
-  // Loads real market data from rounds.json if present. If the file isn't there
-  // yet (e.g. fresh deploy before data is generated), the game runs on the
-  // built-in practice charts — this is expected, not an error.
-  fetch('rounds.json')
-    .then(r=>r.ok?r.json():null)
-    .then(j=>{
-      if(j&&j.rounds&&j.rounds.length&&j.rounds[0].candles){
-        DATA={history_frac:j.history_frac||0.6,source:'real market data',
-              timeframe:j.timeframe||'1D', sourceShort:(j.source||'market data'),
-              rounds:j.rounds};
-      }
-      boot();
-    })
-    .catch(()=>boot());   // network/parse issue → fall back to practice charts
+  fetch('rounds.json').then(r=>r.ok?r.json():Promise.reject()).then(j=>{
+    if(j&&j.rounds&&j.rounds.length&&j.rounds[0].candles){
+      DATA={history_frac:j.history_frac||0.6,source:'real market data',
+            timeframe:j.timeframe||'1D', sourceShort:(j.source||'market data'),
+            rounds:j.rounds};
+    }
+    boot();
+  }).catch(()=>boot());
 
   function boot(){
-    DATA.sourceShort = DATA.sourceShort || (DATA.source==='real market data' ? 'market data' : 'practice charts');
+    DATA.sourceShort = DATA.sourceShort || (DATA.source==='real market data' ? 'market data' : 'demo data');
     DATA.timeframe = DATA.timeframe || '1D';
     document.getElementById('m-source').textContent=DATA.source;
     histFrac=DATA.history_frac||0.6;
@@ -411,6 +405,15 @@
       (mult>1?' &middot; streak &times;'+mult.toFixed(2):'')+'.</div>';
 
     showWhy();
+
+    // ---- site integration: notify parent page (trial counter / credit bank) ----
+    // Harmless when the game runs standalone (no parent listening).
+    try{
+      if(window.parent && window.parent!==window){
+        window.parent.postMessage({type:'velta_round_done'}, '*');
+        window.parent.postMessage({type:'velta_credits', amount:earned}, '*');
+      }
+    }catch(e){}
 
     if(ptr<DATA.rounds.length-1)elNext.style.display='inline-block';
     else elVerdict.innerHTML+='<div class="detail" style="margin-top:8px">Set complete &mdash; average <b>'+avg+'/100</b> over '+scores.length+' charts.</div>';
